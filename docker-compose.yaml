@@ -1,0 +1,18 @@
+version: '2'
+
+
+services:
+    upf:
+        container_name: ebpfupf
+        build: ./
+        hostname: ebpfupf
+        restart: always
+        privileged: true
+        ulimits:
+          memlock: -1
+        command:  
+          - "-iface" 
+          - "eth0"
+          - "-n4addr"
+          - "0.0.0.0:8805"
+          - -verbose
