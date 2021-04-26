@@ -1,19 +1,18 @@
 package main
 
 import (
-	_"context"
+	_ "context"
 	"flag"
 	"fmt"
+	_ "fmt"
+	"net"
 	"os"
 	"os/signal"
-	_"time"
-	_"fmt"
-	"net"
-
+	_ "time"
 
 	log "github.com/sirupsen/logrus"
 
-	_"github.com/wmnsk/go-pfcp/ie"
+	ie "github.com/wmnsk/go-pfcp/ie"
 	"github.com/wmnsk/go-pfcp/message"
 
 	"github.com/dropbox/goebpf"
@@ -24,44 +23,70 @@ const (
 	defaultN4Addr   = "127.0.0.1:8805"
 	defaultN3Addr   = "193.168.1.3"
 	defaultDeviceID = 0
-	UPLINK = 1
-	DOWNLINK = 2
+	UPLINK          = 1
+	DOWNLINK        = 2
 )
 
-func pfcp_SessionEstablish_handle(msg message.Message,addr net.Addr){
-	log.Info("ignored undecodable message:%s, addr:%s",msg,addr)
+func pfcp_SessionEstablish_handle(msg message.Message, addr net.Addr) {
+	log.Info("ignored undecodable message:%s, addr:%s", msg, addr)
 
 }
 
-func n4Server(listen *string){
+func pfcp_AssociationSetup_handle(msg message.Message, listen *string, addr net.Addr, conn *net.UDPConn) {
+	log.Info("Handle Association Setup:%s, addr:%s", msg, addr)
+
+	seq := msg.Sequence()
+
+	dummyAssociationSetupResponse := message.NewAssociationSetupResponse(
+		seq,
+		ie.NewNodeID(*listen, "", *listen),
+		ie.NewCause(ie.CauseRequestAccepted),
+		ie.NewUserPlaneIPResourceInformation(0x71, 15, *listen, "", *listen, ie.SrcInterfaceAccess),
+	)
+
+	rawDummyAssociationSetupResponse, err := dummyAssociationSetupResponse.Marshal()
+	if err != nil {
+		log.Error(err)
+	}
+
+	if _, err := conn.WriteTo(rawDummyAssociationSetupResponse, addr); err != nil {
+		log.Error(err)
+	}
+
+}
+
+func n4Server(listen *string) {
 	laddr, err := net.ResolveUDPAddr("udp", *listen)
 	if err != nil {
 		log.Fatalf("Cannot resolve n4 addr: %v", err)
 	}
 	conn, err := net.ListenUDP("udp", laddr)
 	if err != nil {
-		log.Fatalf("Cannot start n4 socket: %v",err)
+		log.Fatalf("Cannot start n4 socket: %v", err)
 	}
 
 	buf := make([]byte, 1500)
-	for{
+	for {
 		log.Info("input")
 		n, addr, err := conn.ReadFrom(buf)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Info("message len:%d",n)
+		log.Info("message len:%d", n)
 		msg, err := message.Parse(buf[:n])
 		if err != nil {
-			log.Info("ignored undecodable message: %x, error: %s msg:%s", buf[:n], err,msg)
+			log.Info("ignored undecodable message: %x, error: %s msg:%s", buf[:n], err, msg)
 			continue
 		}
-		switch(msg.MessageTypeName()){
-			case "Session Establishment Request":
-				log.Info("message.SessionEstablishmentRequest")
-				pfcp_SessionEstablish_handle(msg,addr)
-			default:
-				log.Info("unknow pfcp message")
+		switch msg.MessageTypeName() {
+		case "Session Establishment Request":
+			log.Info("message.SessionEstablishmentRequest")
+			pfcp_SessionEstablish_handle(msg, addr)
+		case "Association Setup Request":
+			log.Info("message.AssociationSetupRequest")
+			pfcp_AssociationSetup_handle(msg, listen, addr, conn)
+		default:
+			log.Info("unknow pfcp message")
 		}
 	}
 }
@@ -85,11 +110,11 @@ func main() {
 	var verbose bool
 	flag.BoolVar(&verbose, "verbose", false, "Enable verbose mode with debug log messages")
 	var n4Addr string
-	flag.StringVar(&n4Addr,"n4addr",defaultN4Addr,"N4 server socket")
+	flag.StringVar(&n4Addr, "n4addr", defaultN4Addr, "N4 server socket")
 	var iface string
-	flag.StringVar(&iface,"iface", "", "Interface to bind XDP UPF N3/N6")
+	flag.StringVar(&iface, "iface", "", "Interface to bind XDP UPF N3/N6")
 	var elf string
-	flag.StringVar(&elf,"elf", "upf.elf", "clang/llvm compiled binary file")
+	flag.StringVar(&elf, "elf", "upf.elf", "clang/llvm compiled binary file")
 	var test bool
 	flag.BoolVar(&test, "test", true, "mock and testing")
 	flag.Parse()
@@ -129,7 +154,7 @@ func main() {
 	}
 	defer xdp.Detach()
 
-	if test{
+	if test {
 		err := m_teid_pdrs.Upsert(0x1111, 0x01010101)
 		if err != nil {
 			log.Fatalf("Unable to Insert into eBPF map: %v", err)
