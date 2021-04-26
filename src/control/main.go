@@ -27,21 +27,25 @@ const (
 	DOWNLINK        = 2
 )
 
+var (
+	n3Addr string
+)
+
 func pfcp_SessionEstablish_handle(msg message.Message, addr net.Addr) {
 	log.Info("ignored undecodable message:%s, addr:%s", msg, addr)
 
 }
 
-func pfcp_AssociationSetup_handle(msg message.Message, listen *string, addr net.Addr, conn *net.UDPConn) {
+func pfcp_AssociationSetup_handle(msg message.Message, addr net.Addr, conn *net.UDPConn) {
 	log.Info("Handle Association Setup:%s, addr:%s", msg, addr)
 
 	seq := msg.Sequence()
 
 	dummyAssociationSetupResponse := message.NewAssociationSetupResponse(
 		seq,
-		ie.NewNodeID(*listen, "", *listen),
+		ie.NewNodeID(n3Addr, "", n3Addr),
 		ie.NewCause(ie.CauseRequestAccepted),
-		ie.NewUserPlaneIPResourceInformation(0x71, 15, *listen, "", *listen, ie.SrcInterfaceAccess),
+		ie.NewUserPlaneIPResourceInformation(0x71, 15, n3Addr, "", n3Addr, ie.SrcInterfaceAccess),
 	)
 
 	rawDummyAssociationSetupResponse, err := dummyAssociationSetupResponse.Marshal()
@@ -84,7 +88,7 @@ func n4Server(listen *string) {
 			pfcp_SessionEstablish_handle(msg, addr)
 		case "Association Setup Request":
 			log.Info("message.AssociationSetupRequest")
-			pfcp_AssociationSetup_handle(msg, listen, addr, conn)
+			pfcp_AssociationSetup_handle(msg, addr, conn)
 		default:
 			log.Info("unknow pfcp message")
 		}
@@ -117,6 +121,7 @@ func main() {
 	flag.StringVar(&elf, "elf", "upf.elf", "clang/llvm compiled binary file")
 	var test bool
 	flag.BoolVar(&test, "test", true, "mock and testing")
+	flag.StringVar(&n3Addr, "n3addr", defaultN3Addr, "N3 address")
 	flag.Parse()
 
 	if verbose {
