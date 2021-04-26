@@ -31,8 +31,38 @@ var (
 	n3Addr string
 )
 
-func pfcp_SessionEstablish_handle(msg message.Message, addr net.Addr) {
-	log.Info("ignored undecodable message:%s, addr:%s", msg, addr)
+func pfcp_SessionEstablish_handle(msg message.Message, addr net.Addr, conn *net.UDPConn) {
+	log.Info("Handle Session Establishement:%s, addr:%s", msg, addr)
+
+	ser, ok := msg.(*message.SessionEstablishmentRequest)
+	if !ok {
+		log.Error("got unexpected message")
+	}
+
+	seq := ser.Sequence()
+	fseid, _ := ser.CPFSEID.FSEID()
+
+	remoteSEID := fseid.SEID
+	localSEID := remoteSEID
+
+	dummySessionEstablishmentResponse := message.NewSessionEstablishmentResponse(0,
+		0,
+		remoteSEID,
+		seq,
+		0,
+		ie.NewNodeID(n3Addr, "", ""),
+		ie.NewCause(ie.CauseRequestAccepted),
+		ie.NewFSEID(localSEID, net.ParseIP(n3Addr), nil, nil),
+	)
+
+	rawDummySessionEstablishmentResponse, err := dummySessionEstablishmentResponse.Marshal()
+	if err != nil {
+		log.Error(err)
+	}
+
+	if _, err := conn.WriteTo(rawDummySessionEstablishmentResponse, addr); err != nil {
+		log.Error(err)
+	}
 
 }
 
@@ -85,7 +115,7 @@ func n4Server(listen *string) {
 		switch msg.MessageTypeName() {
 		case "Session Establishment Request":
 			log.Info("message.SessionEstablishmentRequest")
-			pfcp_SessionEstablish_handle(msg, addr)
+			pfcp_SessionEstablish_handle(msg, addr, conn)
 		case "Association Setup Request":
 			log.Info("message.AssociationSetupRequest")
 			pfcp_AssociationSetup_handle(msg, addr, conn)
