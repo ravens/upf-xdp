@@ -43,7 +43,7 @@ func pfcp_SessionEstablish_handle(msg message.Message, addr net.Addr, conn *net.
 	fseid, _ := ser.CPFSEID.FSEID()
 
 	remoteSEID := fseid.SEID
-	localSEID := remoteSEID
+	localSEID := ser.SEID()
 
 	dummySessionEstablishmentResponse := message.NewSessionEstablishmentResponse(0,
 		0,
@@ -89,6 +89,38 @@ func pfcp_AssociationSetup_handle(msg message.Message, addr net.Addr, conn *net.
 
 }
 
+func pfcp_SessionModificationRequest_handle(msg message.Message, addr net.Addr, conn *net.UDPConn) {
+	log.Info("Handle Session Modification Request:%s, addr:%s", msg, addr)
+
+	smr, ok := msg.(*message.SessionModificationRequest)
+	if !ok {
+		log.Error("got unexpected message")
+	}
+
+	seq := smr.Sequence()
+	fseid, _ := smr.CPFSEID.FSEID()
+
+	remoteSEID := fseid.SEID
+
+	dummySessionModificationResponse := message.NewSessionModificationResponse(0,
+		0,
+		remoteSEID,
+		seq,
+		0,
+		ie.NewCause(ie.CauseRequestAccepted),
+	)
+
+	rawDummySessionModificationResponse, err := dummySessionModificationResponse.Marshal()
+	if err != nil {
+		log.Error(err)
+	}
+
+	if _, err := conn.WriteTo(rawDummySessionModificationResponse, addr); err != nil {
+		log.Error(err)
+	}
+
+}
+
 func n4Server(listen *string) {
 	laddr, err := net.ResolveUDPAddr("udp", *listen)
 	if err != nil {
@@ -119,6 +151,9 @@ func n4Server(listen *string) {
 		case "Association Setup Request":
 			log.Info("message.AssociationSetupRequest")
 			pfcp_AssociationSetup_handle(msg, addr, conn)
+		case "Session Modification Request":
+			log.Info("message.SessionModificationRequest")
+			pfcp_SessionModificationRequest_handle(msg, addr, conn)
 		default:
 			log.Info("unknow pfcp message, " + msg.MessageTypeName())
 		}
