@@ -90,7 +90,7 @@ func n4Server(listen *string) {
 			log.Info("message.AssociationSetupRequest")
 			pfcp_AssociationSetup_handle(msg, addr, conn)
 		default:
-			log.Info("unknow pfcp message")
+			log.Info("unknow pfcp message, " + msg.MessageTypeName())
 		}
 	}
 }
